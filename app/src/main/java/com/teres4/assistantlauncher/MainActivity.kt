@@ -1,4 +1,4 @@
-package com.teres4.assistantlauncher
+package com.teres4.assistantlauncher // Vaše package name
 
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -10,59 +10,43 @@ import rikka.shizuku.Shizuku
 
 class MainActivity : AppCompatActivity() {
 
-    // Listener pro výsledek žádosti o oprávnění
     private val requestPermissionResultListener =
-        Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        Shizuku.OnRequestPermissionResultListener { _, grantResult ->
             if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                // Pokud uživatel povolí, spustíme akci
                 waitAndExecuteCommand()
             } else {
-                Toast.makeText(this, "Shizuku permissions denied", Toast.LENGTH_SHORT).show()
+                finish() // Pokud nedá práva, ukončit
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Shizuku listener musíme zaregistrovat
-        Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
 
+        // DŮLEŽITÉ: Smazal jsem setContentView(R.layout.activity_main)
+        // Nic se nebude vykreslovat.
+
+        Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
         checkAndRun()
     }
 
     private fun checkAndRun() {
-        // 1. Zkontrolujeme, zda Shizuku server běží
-        if (!Shizuku.pingBinder()) {
-            Toast.makeText(this, "Shituku is not running!", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        // 2. Zkontrolujeme oprávnění
-        if (checkShizukuPermission()) {
+        if (Shizuku.pingBinder() && checkShizukuPermission()) {
             waitAndExecuteCommand()
+        } else if (Shizuku.pingBinder()) {
+            // Pokud nemáme práva, musíme je vyžádat (to zobrazí systémové okno, což je OK)
+            Shizuku.requestPermission(0)
         } else {
-            // 3. Pokud nemáme oprávnění, požádáme o něj
-            requestShizukuPermission()
+            Toast.makeText(this, "Shizuku neběží", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 
     private fun checkShizukuPermission(): Boolean {
-        return if (Shizuku.isPreV11()) {
-            false // Staré verze neřešíme, předpokládáme v11+
-        } else {
-            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun requestShizukuPermission() {
-        if (Shizuku.isPreV11()) {
-            // Staré verze
-        } else {
-            Shizuku.requestPermission(0)
-        }
+        return if (Shizuku.isPreV11()) false else Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
     }
 
     private fun waitAndExecuteCommand() {
-
+        // Tady nic nezobrazujeme, jen čekáme na pozadí
         Handler(Looper.getMainLooper()).postDelayed({
             executeCommand()
         }, 1000)
@@ -72,39 +56,28 @@ class MainActivity : AppCompatActivity() {
         try {
             val command = arrayOf("sh", "-c", "input keyevent 219")
 
-            // 1. Najdeme metodu "newProcess" manuálně (obejdeme kompilátor)
+            // Reflexe pro jistotu (jak jsme řešili minule)
             val method = Shizuku::class.java.getDeclaredMethod(
                 "newProcess",
-                Array<String>::class.java, // Typ prvního parametru (cmd)
-                Array<String>::class.java, // Typ druhého parametru (env)
-                String::class.java         // Typ třetího parametru (dir)
+                Array<String>::class.java, Array<String>::class.java, String::class.java
             )
-
-            // 2. Pro jistotu ji odemkneme, kdyby se tvářila jako private
             method.isAccessible = true
-
-            // 3. Zavoláme ji
-            // null = statická metoda
-            // command, null, null = argumenty
             val process = method.invoke(null, command, null, null) as Process
 
             process.waitFor()
 
-            runOnUiThread {
-                finish()
-            }
-
         } catch (e: Exception) {
             e.printStackTrace()
-            runOnUiThread {
-                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-            }
+        } finally {
+            // DŮLEŽITÉ: Ať se stane cokoliv, aplikaci teď ukončíme
+            // Protože je transparentní, uživatel jen uvidí, že se "nic nestalo",
+            // ale příkaz se provedl.
+            finishAndRemoveTask()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Odregistrování listeneru, aby nedocházelo k memory leakům
         Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
     }
 }
