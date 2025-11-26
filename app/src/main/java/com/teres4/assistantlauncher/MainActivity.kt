@@ -70,18 +70,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun executeCommand() {
         try {
-            // Vytvoření procesu přes Shizuku (běží pod ADB shell userem)
-            // "sh", "-c" je standardní způsob spuštění shell příkazu
-            val process = Shizuku.newProcess(arrayOf("sh", "-c", "input keyevent 219"), null, null)
+            val command = arrayOf("sh", "-c", "input keyevent 219")
+
+            // 1. Najdeme metodu "newProcess" manuálně (obejdeme kompilátor)
+            val method = Shizuku::class.java.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java, // Typ prvního parametru (cmd)
+                Array<String>::class.java, // Typ druhého parametru (env)
+                String::class.java         // Typ třetího parametru (dir)
+            )
+
+            // 2. Pro jistotu ji odemkneme, kdyby se tvářila jako private
+            method.isAccessible = true
+
+            // 3. Zavoláme ji
+            // null = statická metoda
+            // command, null, null = argumenty
+            val process = method.invoke(null, command, null, null) as Process
 
             process.waitFor()
 
-            // Volitelné: Ukončit aplikaci po úspěchu
-            // finish()
+            runOnUiThread {
+                finish()
+            }
 
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            runOnUiThread {
+                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
