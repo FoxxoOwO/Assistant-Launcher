@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+/app/release/app-release.apk
+/app/release/baselineProfiles/0/app-release.dm
+/app/release/baselineProfiles/1/app-release.dm
+/.kotlin/errors/errors-1764176291556.log
+/app/release/output-metadata.json
